@@ -586,10 +586,10 @@ def products(request):
         sku = request.POST.get("sku", "").strip()
         if not sku:
             n = Product.all_objects.filter(shop_id=shop.id).count() + 1
-            sku = f"SKU-{n:05d}"
+            sku = f"SKU-{n:011d}"
             while Product.all_objects.filter(shop_id=shop.id, sku=sku).exists():
                 n += 1
-                sku = f"SKU-{n:05d}"
+                sku = f"SKU-{n:011d}"
         elif Product.all_objects.filter(shop_id=shop.id, sku=sku).exists():
             # A user-supplied SKU that already exists would hit the (shop, sku)
             # unique constraint and raise IntegrityError → 500. Reject cleanly.
@@ -1077,10 +1077,10 @@ def product_import(request):
         except (InvalidOperation, ValueError):
             continue
         n += 1
-        sku = f"SKU-{n:05d}"
+        sku = f"SKU-{n:011d}"
         while Product.all_objects.filter(shop_id=shop.id, sku=sku).exists():
             n += 1
-            sku = f"SKU-{n:05d}"
+            sku = f"SKU-{n:011d}"
         Product.objects.create(shop=shop, name=_clip(name, 200), cost_price=cost, sku=sku)
         created += 1
     messages.success(request, f"Imported {created} product(s).")
