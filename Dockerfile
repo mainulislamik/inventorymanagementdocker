@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Runtime libs: libpq for postgres, curl for the compose healthcheck.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libpq5 curl \
+        libpq5 curl postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

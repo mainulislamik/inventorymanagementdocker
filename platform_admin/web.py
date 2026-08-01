@@ -465,3 +465,55 @@ def plans(request):
         "plan": plan,
         "feature_keys": FEATURE_KEYS,
     })
+
+
+@platform_staff_required
+def download_database_backup(request):
+    """Generates a full PostgreSQL database dump using pg_dump and streams it."""
+    import subprocess
+    import os
+    import time
+    from django.http import StreamingHttpResponse
+
+    # This relies on the environment variables provided by docker-compose.yml
+    db_host = os.environ.get("DB_HOST", "db")
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME", "stockwhisk")
+    db_user = os.environ.get("DB_USER", "stockwhisk")
+    db_pass = os.environ.get("DB_PASSWORD", "stockwhisk_password")
+
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_pass
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    filename = f"stockwhisk_backup_{timestamp}.sql"
+
+    try:
+        # We stream the output of pg_dump directly to the client
+        process = subprocess.Popen(
+            ["pg_dump", "-h", db_host, "-p", db_port, "-U", db_user, "-d", db_name, "--clean", "--if-exists", "--no-owner", "--no-privileges"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        )
+
+        def file_iterator():
+            # Yield chunks of 8KB
+            for chunk in iter(lambda: process.stdout.read(8192), b""):
+                yield chunk
+            
+            # Check for errors after streaming finishes
+            process.wait()
+            if process.returncode != 0:
+                err = process.stderr.read().decode()
+                # We can't change HTTP status after streaming starts, but we log the error
+                import logging
+                logging.getLogger("django").error(f"pg_dump failed: {err}")
+
+        response = StreamingHttpResponse(file_iterator(), content_type="application/sql")
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except FileNotFoundError:
+        messages.error(request, "Backup failed: postgresql-client is not installed on the server.")
+        return redirect("platform:dashboard")

@@ -26,4 +26,5 @@ urlpatterns = [
     path("tutorials/", web.tutorials, name="tutorials"),
     path("tutorials/<int:pk>/edit/", web.tutorial_edit, name="tutorial_edit"),
     path("tutorials/<int:pk>/delete/", web.tutorial_delete, name="tutorial_delete"),
+    path("backup/download/", web.download_database_backup, name="download_database_backup"),
 ]
