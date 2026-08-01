@@ -519,6 +519,10 @@ def download_database_backup(request):
         return redirect("platform:dashboard")
 
 @platform_staff_required
+def backups_page(request):
+    return render(request, "platform/backups.html", {"active": "backups"})
+
+@platform_staff_required
 @require_http_methods(["POST"])
 def restore_database(request):
     import subprocess

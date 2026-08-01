@@ -55,21 +55,4 @@
   </div>
 </div>
 
-<div class="card shadow-sm mt-4 border-primary">
-  <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
-    <div>
-      <div class="fw-bold text-primary mb-1">System Backups & Restore</div>
-      <div class="small text-secondary">Download a full SQL dump or restore an existing backup.</div>
-    </div>
-    <div class="d-flex align-items-center gap-3">
-      <a href="{% url 'platform:download_database_backup' %}" class="btn btn-outline-primary btn-sm">Download Backup (.sql)</a>
-      <div class="vr"></div>
-      <form method="post" action="{% url 'platform:restore_database' %}" enctype="multipart/form-data" class="d-flex align-items-center gap-2" onsubmit="return confirm('WARNING: This will completely overwrite your current database with the uploaded file! Are you absolutely sure?');">
-        {% csrf_token %}
-        <input type="file" name="backup_file" class="form-control form-control-sm" accept=".sql" required style="max-width: 250px;">
-        <button type="submit" class="btn btn-danger btn-sm">Restore Database</button>
-      </form>
-    </div>
-  </div>
-</div>
 {% endblock %}
