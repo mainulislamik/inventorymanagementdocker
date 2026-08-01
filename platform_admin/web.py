@@ -517,3 +517,56 @@ def download_database_backup(request):
     except FileNotFoundError:
         messages.error(request, "Backup failed: postgresql-client is not installed on the server.")
         return redirect("platform:dashboard")
+
+@platform_staff_required
+@require_http_methods(["POST"])
+def restore_database(request):
+    import subprocess
+    import os
+    import tempfile
+
+    sql_file = request.FILES.get('backup_file')
+    if not sql_file:
+        messages.error(request, "No file uploaded.")
+        return redirect("platform:dashboard")
+
+    # Save to temp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".sql") as temp_file:
+        for chunk in sql_file.chunks():
+            temp_file.write(chunk)
+        temp_file_path = temp_file.name
+
+    db_host = os.environ.get("DB_HOST", "db")
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME", "stockwhisk")
+    db_user = os.environ.get("DB_USER", "stockwhisk")
+    db_pass = os.environ.get("DB_PASSWORD", "stockwhisk_password")
+
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_pass
+
+    try:
+        # 1. Terminate all other connections to the database so we don't get "database is being accessed" errors
+        kill_conn_sql = "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();"
+        subprocess.run(
+            ["psql", "-h", db_host, "-p", db_port, "-U", db_user, "-d", db_name, "-c", kill_conn_sql],
+            env=env, check=False
+        )
+
+        # 2. Run the restore command (the .sql file contains DROP TABLE commands because of --clean)
+        result = subprocess.run(
+            ["psql", "-h", db_host, "-p", db_port, "-U", db_user, "-d", db_name, "-f", temp_file_path],
+            env=env, capture_output=True, text=True
+        )
+        
+        os.remove(temp_file_path)
+
+        if result.returncode == 0:
+            messages.success(request, "Database successfully restored! You may need to log in again if your session was wiped.")
+        else:
+            messages.error(request, f"Restore completed with some errors: {result.stderr[:200]}...")
+            
+    except Exception as e:
+        messages.error(request, f"Restore system error: {str(e)}")
+
+    return redirect("platform:dashboard")
