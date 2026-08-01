@@ -1,5 +1,5 @@
 stockwhisk.com, www.stockwhisk.com {
-    encode gzip
+    encode zstd gzip
     
     # 12M upload limit
     request_body {

@@ -10,7 +10,7 @@ import os
 bind = os.getenv("GUNICORN_BIND", "unix:/run/stockwhisk/gunicorn.sock")
 
 workers = int(os.getenv("WEB_CONCURRENCY", multiprocessing.cpu_count() * 2 + 1))
-worker_class = "sync"          # switch to "gthread" + threads=N for I/O-bound loads
+worker_class = "gthread"          # switch to "gthread" + threads=N for I/O-bound loads
 threads = int(os.getenv("GUNICORN_THREADS", "1"))
 timeout = int(os.getenv("GUNICORN_TIMEOUT", "60"))
 graceful_timeout = 30

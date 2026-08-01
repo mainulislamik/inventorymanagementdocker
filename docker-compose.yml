@@ -45,6 +45,9 @@ services:
       ALLOWED_HOSTS: "*"
       CSRF_TRUSTED_ORIGINS: "http://localhost,http://127.0.0.1,https://stockwhisk.com,https://www.stockwhisk.com"
       SECURE_SSL_REDIRECT: "False"
+      WEB_CONCURRENCY: "2"
+      GUNICORN_THREADS: "4"
+      DB_CONN_MAX_AGE: "600"
     volumes:
       - static:/app/staticfiles
       - media:/app/media
@@ -70,6 +73,7 @@ services:
       DB_PASSWORD: stockwhisk_password
       SECRET_KEY: django-insecure-default-key-for-zero-config
       DEBUG: "False"
+      DB_CONN_MAX_AGE: "600"
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
