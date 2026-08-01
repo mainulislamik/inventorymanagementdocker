@@ -15,7 +15,7 @@ class ProductImporter(BaseImporter):
     MATCH_KEY = "sku_code"
     TARGET_FIELDS = [
         Field("name", "Item name", required=True, kind="text"),
-        Field("sku_code", "SKU code", required=True, kind="text"),
+        Field("sku_code", "SKU code", required=False, kind="text"),
         Field("avg_cost", "Avg cost", required=True, kind="money"),
         Field("selling_price", "Selling price", required=False, kind="money"),
         Field("barcode", "Barcode", required=False, kind="text"),
@@ -49,7 +49,18 @@ class ProductImporter(BaseImporter):
         obj = existing or Product(shop=shop)
         obj.shop = shop
         obj.name = cleaned.get("name") or obj.name
-        obj.sku = sku
+        
+        # Auto-generate a unique SKU when left blank during creation
+        if not sku and not obj.sku:
+            n = Product.all_objects.filter(shop_id=shop.id).count() + 1
+            sku = f"SKU-{n:011d}"
+            while Product.all_objects.filter(shop_id=shop.id, sku=sku).exists():
+                n += 1
+                sku = f"SKU-{n:011d}"
+                
+        if sku:
+            obj.sku = sku
+            
         obj.cost_price = cost
         if cleaned.get("selling_price") is not None:
             obj.selling_price = cleaned["selling_price"]
