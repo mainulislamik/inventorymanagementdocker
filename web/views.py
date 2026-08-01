@@ -2259,3 +2259,73 @@ def settings_view(request):
         "active": "settings", "shop": shop,
         "subscription": subscription_status(shop),
     })
+
+@shop_member_required
+def backups_page(request):
+    if request.user.role != RoleType.OWNER:
+        messages.error(request, "Only the shop owner can access backups.")
+        return redirect("web:dashboard")
+    return render(request, "web/backups.html", {"active": "admin", "current_shop": request.shop})
+
+@shop_member_required
+def download_database_backup(request):
+    if request.user.role != RoleType.OWNER:
+        messages.error(request, "Only the shop owner can download backups.")
+        return redirect("web:dashboard")
+    import time
+    import io
+    from django.http import HttpResponse
+    from django.core.management import call_command
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    filename = f"stockwhisk_backup_{timestamp}.json"
+
+    try:
+        buf = io.StringIO()
+        call_command(
+            "dumpdata",
+            exclude=["contenttypes", "auth.permission", "sessions.session", "audit.auditlog"],
+            format="json",
+            indent=2,
+            stdout=buf
+        )
+        response = HttpResponse(buf.getvalue(), content_type="application/json")
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        messages.error(request, f"Backup failed: {str(e)}")
+        return redirect("web:backups")
+
+@shop_member_required
+@require_http_methods(["POST"])
+def restore_database(request):
+    if request.user.role != RoleType.OWNER:
+        messages.error(request, "Only the shop owner can restore backups.")
+        return redirect("web:dashboard")
+    import os
+    import tempfile
+    from django.core.management import call_command
+    from django.db import transaction
+
+    json_file = request.FILES.get('backup_file')
+    if not json_file:
+        messages.error(request, "No file uploaded.")
+        return redirect("web:backups")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
+        for chunk in json_file.chunks():
+            temp_file.write(chunk)
+        temp_file_path = temp_file.name
+
+    try:
+        with transaction.atomic():
+            call_command("flush", "--no-input")
+            call_command("loaddata", temp_file_path)
+        messages.success(request, "Database successfully restored from JSON backup! You may need to log in again if your session was wiped.")
+    except Exception as e:
+        messages.error(request, f"Restore system error: {str(e)}")
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+    return redirect("web:dashboard")

@@ -90,5 +90,6 @@
     <a href="{% url 'web:tutorials' %}" title="Video tutorials" class="nav-link {% if active == 'tutorials' %}active{% endif %}"><i class="bi bi-play-btn"></i> <span x-show="!collapsed" x-cloak>Video tutorials</span></a>
     {% if is_owner or 'manage_users' in perms_set %}<a href="{% url 'web:users' %}" title="Users & Roles" class="nav-link {% if active == 'users' %}active{% endif %}"><i class="bi bi-key"></i> <span x-show="!collapsed" x-cloak>Users &amp; Roles</span></a>{% endif %}
     <a href="{% url 'web:settings' %}" title="Settings" class="nav-link {% if active == 'settings' %}active{% endif %}"><i class="bi bi-gear"></i> <span x-show="!collapsed" x-cloak>Settings</span></a>
+    {% if is_owner %}<a href="{% url 'web:backups' %}" title="System Backups" class="nav-link {% if active == 'backups' %}active{% endif %}"><i class="bi bi-device-hdd"></i> <span x-show="!collapsed" x-cloak>System Backups</span></a>{% endif %}
   </div>
 </div>

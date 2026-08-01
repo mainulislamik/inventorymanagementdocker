@@ -74,4 +74,7 @@ urlpatterns = [
     path("barcodes/<int:pk>/edit/", views.barcode_edit, name="barcode_edit"),
     path("users/", views.users, name="users"),
     path("settings/", views.settings_view, name="settings"),
+    path("backup/", views.backups_page, name="backups"),
+    path("backup/download/", views.download_database_backup, name="download_database_backup"),
+    path("backup/restore/", views.restore_database, name="restore_database"),
 ]
