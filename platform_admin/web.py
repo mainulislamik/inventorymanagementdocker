@@ -98,7 +98,8 @@ def shop_create(request):
         if User.objects.filter(email__iexact=email).exists():
             messages.error(request, "A user with that email already exists.")
             return redirect("platform:shop_create")
-        plan = SubscriptionPlan.objects.filter(pk=request.POST.get("plan")).first()
+        plan_id = request.POST.get("plan")
+        plan = SubscriptionPlan.objects.filter(pk=plan_id).first() if plan_id else None
         shop, owner = register_shop(
             name=request.POST["name"],
             owner_email=email,
