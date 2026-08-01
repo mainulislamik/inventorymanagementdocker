@@ -470,31 +470,53 @@ def plans(request):
 
 @platform_staff_required
 def download_database_backup(request):
-    """Generates a full database dump in JSON format."""
+    """Generates a full database dump in SQL format."""
+    import subprocess
+    import os
     import time
-    import io
-    from django.http import HttpResponse
-    from django.core.management import call_command
+    from django.http import StreamingHttpResponse
+
+    # This relies on the environment variables provided by docker-compose.yml
+    db_host = os.environ.get("DB_HOST", "db")
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME", "stockwhisk")
+    db_user = os.environ.get("DB_USER", "stockwhisk")
+    db_pass = os.environ.get("DB_PASSWORD", "stockwhisk_password")
+
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_pass
 
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = f"stockwhisk_backup_{timestamp}.json"
+    filename = f"stockwhisk_backup_{timestamp}.sql"
 
     try:
-        buf = io.StringIO()
-        # Exclude things that are auto-created (contenttypes, permissions) or transient (sessions)
-        call_command(
-            "dumpdata",
-            exclude=["contenttypes", "auth.permission", "sessions.session", "audit.auditlog"],
-            format="json",
-            indent=2,
-            stdout=buf
+        # We stream the output of pg_dump directly to the client
+        process = subprocess.Popen(
+            ["pg_dump", "-h", db_host, "-p", db_port, "-U", db_user, "-d", db_name, "--clean", "--if-exists", "--no-owner", "--no-privileges"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
         )
-        
-        response = HttpResponse(buf.getvalue(), content_type="application/json")
+
+        def file_iterator():
+            # Yield chunks of 8KB
+            for chunk in iter(lambda: process.stdout.read(8192), b""):
+                yield chunk
+            
+            # Check for errors after streaming finishes
+            process.wait()
+            if process.returncode != 0:
+                err = process.stderr.read().decode()
+                # We can't change HTTP status after streaming starts, but we log the error
+                import logging
+                logging.getLogger("django").error(f"pg_dump failed: {err}")
+
+        response = StreamingHttpResponse(file_iterator(), content_type="application/sql")
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-    except Exception as e:
-        messages.error(request, f"Backup failed: {str(e)}")
+
+    except FileNotFoundError:
+        messages.error(request, "Backup failed: postgresql-client is not installed on the server.")
         return redirect("platform:dashboard")
 
 @platform_staff_required
@@ -504,34 +526,52 @@ def backups_page(request):
 @platform_staff_required
 @require_http_methods(["POST"])
 def restore_database(request):
+    import subprocess
     import os
     import tempfile
-    from django.core.management import call_command
-    from django.db import transaction
 
-    json_file = request.FILES.get('backup_file')
-    if not json_file:
+    sql_file = request.FILES.get('backup_file')
+    if not sql_file:
         messages.error(request, "No file uploaded.")
         return redirect("platform:dashboard")
 
     # Save to temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
-        for chunk in json_file.chunks():
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".sql") as temp_file:
+        for chunk in sql_file.chunks():
             temp_file.write(chunk)
         temp_file_path = temp_file.name
 
-    try:
-        # Atomic block so if loaddata fails, the flush (TRUNCATE) rolls back (on PostgreSQL)
-        with transaction.atomic():
-            call_command("flush", "--no-input")
-            call_command("loaddata", temp_file_path)
+    db_host = os.environ.get("DB_HOST", "db")
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME", "stockwhisk")
+    db_user = os.environ.get("DB_USER", "stockwhisk")
+    db_pass = os.environ.get("DB_PASSWORD", "stockwhisk_password")
 
-        messages.success(request, "Database successfully restored from JSON backup! You may need to log in again if your session was wiped.")
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_pass
+
+    try:
+        # 1. Terminate all other connections to the database so we don't get "database is being accessed" errors
+        kill_conn_sql = "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();"
+        subprocess.run(
+            ["psql", "-h", db_host, "-p", db_port, "-U", db_user, "-d", db_name, "-c", kill_conn_sql],
+            env=env, check=False
+        )
+
+        # 2. Run the restore command (the .sql file contains DROP TABLE commands because of --clean)
+        result = subprocess.run(
+            ["psql", "-h", db_host, "-p", db_port, "-U", db_user, "-d", db_name, "-f", temp_file_path],
+            env=env, capture_output=True, text=True
+        )
+        
+        os.remove(temp_file_path)
+
+        if result.returncode == 0:
+            messages.success(request, "Database successfully restored from SQL backup! You may need to log in again if your session was wiped.")
+        else:
+            messages.error(request, f"Restore completed with some errors: {result.stderr[:200]}...")
             
     except Exception as e:
         messages.error(request, f"Restore system error: {str(e)}")
-    finally:
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
 
     return redirect("platform:dashboard")
