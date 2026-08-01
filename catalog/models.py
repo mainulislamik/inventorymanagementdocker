@@ -62,8 +62,8 @@ class Product(TenantScopedModel):
     """
 
     name = models.CharField(max_length=200)
-    sku = models.CharField(max_length=60, blank=True)
-    barcode = models.CharField(max_length=60, blank=True, db_index=True)
+    sku = models.CharField(max_length=120, blank=True)
+    barcode = models.CharField(max_length=120, blank=True, db_index=True)
 
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="products"
@@ -136,7 +136,7 @@ class ProductUnit(TenantScopedModel):
         RETURNED = "returned", "Returned"
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="units")
-    barcode = models.CharField(max_length=80, db_index=True)
+    barcode = models.CharField(max_length=120, db_index=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.IN_STOCK)
     # Per-unit price snapshot taken at purchase time. A product has ONE
     # ``selling_price`` field that the latest purchase overwrites, so without this
@@ -188,8 +188,8 @@ class ProductVariation(TenantScopedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="variations")
     name = models.CharField(max_length=120)
     attributes = models.JSONField(default=dict, blank=True)  # {"ram": "8GB"}
-    sku = models.CharField(max_length=60, blank=True)
-    barcode = models.CharField(max_length=60, blank=True, db_index=True)
+    sku = models.CharField(max_length=120, blank=True)
+    barcode = models.CharField(max_length=120, blank=True, db_index=True)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     current_stock = models.DecimalField(max_digits=14, decimal_places=2, default=0, editable=False)
